@@ -1,5 +1,7 @@
-﻿using HackerNewsAPI.Services;
+﻿using HackerNewsAPI.Configuration;
+using HackerNewsAPI.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace HackerNewsAPI.Controllers.V1
 {
@@ -14,6 +16,7 @@ namespace HackerNewsAPI.Controllers.V1
             _bestStoriesService = bestStoriesService;
         }
 
+        [EnableRateLimiting(RateLimitOptions.PolicyName)]
         [HttpGet("{numberOfStories}/details")]
         public async Task<IActionResult> GetBestStoriesDetails(int numberOfStories)
         {

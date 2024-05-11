@@ -1,10 +1,10 @@
-using AspNetCoreRateLimit;
 using HackerNewsAPI.Configuration;
 using HackerNewsAPI.HackerNews;
 using HackerNewsAPI.Services;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Polly;
-using System.Net;
+using System.Threading.RateLimiting;
 
 namespace HackerNewsAPI
 {
@@ -20,6 +20,7 @@ namespace HackerNewsAPI
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+            builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection(RateLimitOptions.Section));
 
             builder.Services.Configure<HackerNewsOptions>(builder.Configuration.GetSection(HackerNewsOptions.Section));
             builder.Services.AddHttpClient<IHackerNewsApiService, HackerNewsApiService>()
@@ -44,33 +45,26 @@ namespace HackerNewsAPI
 
             builder.Services.AddLogging();
 
-            // Add Rate Limiting
-            builder.Services.AddMemoryCache();
+            var rateLimitOptions = new RateLimitOptions();
+            builder.Configuration.GetSection(RateLimitOptions.Section).Bind(rateLimitOptions);
 
-            builder.Services.Configure<IpRateLimitOptions>(options =>
+            builder.Services.AddRateLimiter(limiterOptions =>
             {
-                options.EnableEndpointRateLimiting = true;
-                options.StackBlockedRequests = false;
-                options.HttpStatusCode = (int)HttpStatusCode.TooManyRequests;
-                options.RealIpHeader = "X-Real-IP";
-                options.ClientIdHeader = "X-ClientId";
-                options.QuotaExceededMessage = "Requests quota limit reached! The maximum amount of requests in 10 seconds is 2.";
-                options.GeneralRules = new List<RateLimitRule> 
-                { 
-                    new() 
-                    {
-                        Endpoint = "*",
-                        Period = "10s",
-                        Limit = 2
-                    } 
-                };
-            });
+                limiterOptions.OnRejected = (context, cancellationToken) =>
+                {
+                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
 
-            builder.Services.AddSingleton<IIpPolicyStore, MemoryCacheIpPolicyStore>();
-            builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
-            builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
-            builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
-            builder.Services.AddInMemoryRateLimiting();
+                    return new ValueTask();
+                };
+
+                limiterOptions.AddFixedWindowLimiter(policyName: RateLimitOptions.PolicyName, options =>
+                {
+                    options.PermitLimit = rateLimitOptions.PermitLimit;
+                    options.Window = TimeSpan.FromSeconds(rateLimitOptions.TimeWindowSeconds);
+                    options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    options.QueueLimit = rateLimitOptions.QueueLimit;
+                });
+            });
 
             var app = builder.Build();
 
@@ -85,7 +79,7 @@ namespace HackerNewsAPI
             app.UseAuthorization();
 
             app.MapControllers();
-            app.UseIpRateLimiting();
+            app.UseRateLimiter();
 
             app.Run();
         }

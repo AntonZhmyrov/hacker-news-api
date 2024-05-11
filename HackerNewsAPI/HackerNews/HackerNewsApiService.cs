@@ -37,10 +37,20 @@ namespace HackerNewsAPI.HackerNews
         public async Task<IEnumerable<BestStoryResponse?>> GetStoriesDetailsAsync(IEnumerable<string> ids)
         {
             const string requestUri = "item/{0}.json";
+            const int batchSize = 50;
+
+            var bestStories = new List<BestStoryResponse?>();
             var requestUris = ids.Select(id => string.Format(requestUri, id)).ToArray();
-            var requests = requestUris.Select(x => GetStoryDetailsAsync(x));
-            
-            return await Task.WhenAll(requests);
+            int numberOfBatches = (int)Math.Ceiling((double)requestUris.Length / batchSize);
+
+            for (int i = 0; i < numberOfBatches; i++)
+            {
+                var currentUris = requestUris.Skip(i * batchSize).Take(batchSize);
+                var requests = currentUris.Select(x => GetStoryDetailsAsync(x));
+                bestStories.AddRange(await Task.WhenAll(requests));
+            }
+
+            return bestStories;
         }
 
         private async Task<BestStoryResponse?> GetStoryDetailsAsync(string requestUri)
