@@ -15,7 +15,7 @@
 Basically, the implemented service plays a role of API Gateway. It requests certain information from a third party service, simplifies it and outputs in a client-friendly manner. 
 It consists of one endpoint which accepts one parameter - number of best stories to return the information for. In my opinion, there are 2 main bottlenecks in the current implemenation of the third party Hacker News API:
 1. There is no rate limiting. We can easily flood the service with requests and make it go down.
-2. In order to retrieve the details of best stories, we need to separately load each story from the third party. The amount of requests in this case equals to ***numberOfStories*** API parameter. We don't limit its value, so potentially, it could be thousands subrequests in only one call to our API.
+2. In order to retrieve the details of best stories, we need to separately load each story from the third party. The amount of requests in this case equals to ***numberOfStories*** API parameter plus one request to get best stories ids so --> ***numberOfRequests = numberOfStories + 1***. We don't limit the number of stories value, so potentially, it could be thousands subrequests in only one call to our API.
 
 I fixed those 2 bottlneckes by providing:
 * fixed window rate limiting using the *Microsoft.AspNetCore.RateLimiting* nuget package. Now, our service will "protect" the Hacker News API from being overloaded by requests.
@@ -27,5 +27,10 @@ The flow of getting the info for the best story is the following (let's assume t
 3. So, for 2 best stories there will be 3 requests to third party Hacker News API.
 4. Then there is processing and mapping of the result and it is returned to a client.
 
+## Possible enhancements and improvements
+
+1. The shipment of application could be done using Docker. We could package it in container and run using Docker. This was not done for simplicity purposes and irrelevance in this case. We have only one small service that communicates with third party which we don't control. If we controlled and owned the second service (Hacker News API) or maybe had a DB to communicate with - Docker would be a great tool for us here.
+2. Introduce integration testing. We can enhance our testing using the WebApplicationFactory and WireMock (to mock third party Hacker Service News) and have integration tests to fully check the request pipeline, rate limiting, retries, endpoint outputs etc.
+3. I would probably discuss the business purpose of our API to get best story details. If we want to output the Hacker News in some sort of Feed (like in Twitter or Instagram), then we need to introduce pagination. Requirements for the task didn't say anything about that explicitly, so a confirmation would be needed. But, if we need to display it somehow, or any other service will consume data from our API, pagination would help in limiting the requests and making the response size more limited and manageable. Right now, the pagination is probably not needed - as best stories API holds only 200 records. But if it changes, it will be one more reason to introduce pagination.
 
 
