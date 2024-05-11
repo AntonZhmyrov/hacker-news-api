@@ -4,6 +4,7 @@ using HackerNewsAPI.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Polly;
+using System.Globalization;
 using System.Threading.RateLimiting;
 
 namespace HackerNewsAPI
@@ -52,6 +53,12 @@ namespace HackerNewsAPI
             {
                 limiterOptions.OnRejected = (context, cancellationToken) =>
                 {
+                    if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                    {
+                        context.HttpContext.Response.Headers.RetryAfter =
+                            ((int)retryAfter.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo);
+                    }
+
                     context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
 
                     return new ValueTask();
